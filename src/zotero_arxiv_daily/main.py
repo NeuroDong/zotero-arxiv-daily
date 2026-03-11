@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import hydra
 from loguru import logger
 import dotenv
@@ -11,6 +11,10 @@ dotenv.load_dotenv()
 
 @hydra.main(version_base=None, config_path="../../config", config_name="default")
 def main(config:DictConfig):
+    # Resolve all interpolations (e.g. ${oc.env:ZOTERO_ID}) so env vars are
+    # applied when running in CI (e.g. GitHub Actions) where config is from CUSTOM_CONFIG.
+    OmegaConf.resolve(config)
+
     # Configure loguru log level based on config
     log_level = "DEBUG" if config.executor.debug else "INFO"
     logger.remove()  # Remove default handler
