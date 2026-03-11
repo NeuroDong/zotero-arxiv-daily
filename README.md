@@ -109,6 +109,7 @@ zotero:
   user_id: ??? # User ID of your Zotero account.
   api_key: ??? # An Zotero API key with read access.
   include_path: null # A glob pattern marking the Zotero collections that should be included. Example: "2026/survey/**"
+  item_types: ["journalArticle", "conferencePaper", "preprint", "bookSection", "report", "thesis", "manuscript"] # Types to include as corpus; add e.g. "book", "document" to include more.
 
 source:
   arxiv:

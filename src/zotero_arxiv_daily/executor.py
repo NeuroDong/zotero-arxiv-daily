@@ -24,8 +24,17 @@ class Executor:
         zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)
         collections = zot.everything(zot.collections())
         collections = {c['key']:c for c in collections}
-        all_items = zot.everything(zot.items(itemType='conferencePaper || journalArticle || preprint'))
-        corpus = [c for c in all_items if c['data']['abstractNote'] != '']
+        item_types = getattr(self.config.zotero, 'item_types', None) or ['conferencePaper', 'journalArticle', 'preprint']
+        item_type_query = ' || '.join(item_types)
+        logger.info(f"Fetching Zotero items of types: {item_types}")
+        all_items = zot.everything(zot.items(itemType=item_type_query))
+        # Include all items; use title as fallback when abstract is empty so workflow still runs
+        corpus = []
+        for c in all_items:
+            abstract = (c['data'].get('abstractNote') or '').strip()
+            if not abstract:
+                abstract = (c['data'].get('title') or '').strip()
+            corpus.append((c, abstract))
         if len(all_items) == 0:
             logger.warning(
                 "Zotero API returned 0 items. Check: (1) user_id is the numeric ID from "
@@ -33,10 +42,11 @@ class Executor:
                 "(2) API key has read access, (3) you have items of type conference paper, "
                 "journal article, or preprint."
             )
-        elif len(corpus) == 0:
+        elif sum(1 for _, ab in corpus if not ab) > 0:
+            no_abstract_count = sum(1 for _, ab in corpus if not ab)
             logger.warning(
-                f"Zotero returned {len(all_items)} item(s) but none have an abstract. "
-                "Add abstracts to your papers so they can be used for recommendations."
+                f"{no_abstract_count} of {len(corpus)} item(s) have no abstract; using title for matching. "
+                "Adding abstracts in Zotero will improve recommendation quality."
             )
         logger.info(f"Fetched {len(corpus)} zotero papers")
         def get_collection_path(col_key:str) -> str:
@@ -44,15 +54,15 @@ class Executor:
                 return get_collection_path(p) + '/' + collections[col_key]['data']['name']
             else:
                 return collections[col_key]['data']['name']
-        for c in corpus:
+        for c, _ in corpus:
             paths = [get_collection_path(col) for col in c['data']['collections']]
             c['paths'] = paths
         return [CorpusPaper(
             title=c['data']['title'],
-            abstract=c['data']['abstractNote'],
+            abstract=abstract,
             added_date=datetime.strptime(c['data']['dateAdded'], '%Y-%m-%dT%H:%M:%SZ'),
             paths=c['paths']
-        ) for c in corpus]
+        ) for c, abstract in corpus]
     
     def filter_corpus(self, corpus:list[CorpusPaper]) -> list[CorpusPaper]:
         if not self.config.zotero.include_path:
